@@ -1,0 +1,55 @@
+brainformer/
+├── config/
+│   └── base_config.py           # BrainFormerConfig ve diğer yapılandırmalar
+│
+├── models/
+│   ├── __init__.py
+│   ├── brainformer.py           # BrainFormer ana modeli (embeddings + dual brain + memory + output)
+│   ├── transformer_block.py     # TransformerBlock + MoE destekli versiyonu
+│   ├── attention/
+│   │   ├── directed_multihead.py
+│   │   └── combined_attention.py
+│   ├── memory/
+│   │   ├── short_term.py
+│   │   ├── long_term.py
+│   │   └── expert_memory.py     # MoE bazlı Memory modülü (opsiyonel)
+│   ├── dual_brain.py            # DualBrainTransformer (left/right hemispheres)
+│   ├── early_exit.py            # EarlyExitClassifier
+│   └── moe/
+│       ├── topk_gate.py         # Gating mekanizmaları (Top1, Top2, Router, RouterL0 vs)
+│       └── moe_layer.py         # Mixture of Experts katmanı
+│
+├── data/
+│   ├── tokenizer.py             # Basit veya gelişmiş tokenizer (NLTK, spaCy, HF)
+│   ├── loader.py                # `load_data()` ve `create_batches()` gibi işlemler
+│   └── dataset.py              # Custom `Dataset` ve `DataLoader` sınıfları
+│
+├── training/
+│   ├── train_loop.py            # `train_model()`, optimizasyon, LR scheduler
+│   ├── callbacks.py             # early stopping, LR annealing, metric logger
+│   └── evaluation.py            # validation, test, perplexity hesapları
+│
+├── sampling/
+│   ├── sampler.py               # `sample_with_temperature()` gibi sampling metotları
+│   └── text_generation.py       # generate_text() gibi kullanıcı arayüzü
+│
+├── utils/
+│   ├── logger.py                # gelişmiş logger (loguru, tensorboard, wandb opsiyonel)
+│   ├── profiler.py              # zaman / hafıza profili çıkarıcı (torch.profiler, memory tracker)
+│   └── seed.py                  # random seed sabitleme vs
+│
+├── scripts/
+│   ├── train.py                 # CLI veya script üzerinden eğitim
+│   ├── infer.py                 # CLI ile metin üretme
+│   └── export.py                # TorchScript / ONNX / HF Transformers export
+│
+├── tests/
+│   ├── test_attention.py
+│   ├── test_moe.py
+│   ├── test_memory.py
+│   └── ...
+│
+├── checkpoints/                # Kaydedilen modellerin olduğu klasör
+├── data.txt                    # Ham metin verisi
+├── README.md
+└── requirements.txt
