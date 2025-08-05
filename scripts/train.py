@@ -1,7 +1,6 @@
 import torch
-
 from config.base_config import device, BrainFormerConfig
-from data.loader import load_data, create_batches
+from data.loader import load_data, create_batches, prepare_and_save_data
 from models.brainformer import BrainFormer
 from sampling.text_generation import generate_text
 from training.train_loop import train_model
@@ -17,6 +16,8 @@ def main():
     if device.type == 'cuda':
         print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
     print("=" * 60)
+
+    prepare_and_save_data()
 
     while True:
         print("\n1 - Train (Gelişmiş Eğitim)")
@@ -49,7 +50,7 @@ def main():
             print(f"🏗️ Model oluşturuldu - Parametreler: {param_count:,}")
 
             # Create batches with smaller sequence length
-            batches = create_batches(token_sequences, seq_len=16, batch_size=8)
+            batches = create_batches(token_sequences, batch_size=8)
             print(f"📦 Batch'ler hazırlandı: {len(batches)}")
 
             if len(batches) == 0:
