@@ -22,14 +22,14 @@ else:
 # =============================================================================
 @dataclass
 class BrainFormerConfig:
-    d_model: int = 256
-    num_heads: int = 8
-    num_layers: int = 6
+    d_model: int = 16
+    num_heads: int = 2
+    num_layers: int = 2
     vocab_size: int = 1000
-    max_seq_len: int = 512
-    memory_size: int = 128
-    ff_hidden_dim: int = 1024  # FFN genişliği
+    max_seq_len: int = 16
+    memory_size: int = 16
+    ff_hidden_dim: int = 64
     early_exit_threshold: float = 0.9
-    dropout: float = 0.3
+    dropout: float = 0.1
     temperature: float = 0.8
     device: str = str(device)

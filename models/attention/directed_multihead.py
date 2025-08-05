@@ -2,70 +2,63 @@ from typing import Optional
 import torch.nn as nn
 import math
 import torch
+from torch.nn import functional as F
 # =============================================================================
 # ADVANCED MULTIHEAD ATTENTION
 # =============================================================================
 class DirectedMultiheadAttention(nn.Module):
-    def __init__(self, embed_dim: int, num_heads: int, dropout: float = 0.3):
+    def __init__(self, embed_dim, num_heads, dropout=0.1, sparse_topk=0):
         super().__init__()
-        assert embed_dim % num_heads == 0, "embed_dim must be divisible by num_heads"
-
         self.embed_dim = embed_dim
         self.num_heads = num_heads
-        self.head_dim = embed_dim // num_heads
         self.dropout = nn.Dropout(dropout)
+        self.sparse_topk = sparse_topk
 
-        # Projection layers
-        self.q_proj = nn.Linear(embed_dim, embed_dim, bias=False)
-        self.k_proj = nn.Linear(embed_dim, embed_dim, bias=False)
-        self.v_proj = nn.Linear(embed_dim, embed_dim, bias=False)
+        self.head_dim = embed_dim // num_heads
+        assert self.head_dim * num_heads == embed_dim
+
+        self.q_proj = nn.Linear(embed_dim, embed_dim)
+        self.k_proj = nn.Linear(embed_dim, embed_dim)
+        self.v_proj = nn.Linear(embed_dim, embed_dim)
         self.out_proj = nn.Linear(embed_dim, embed_dim)
 
-        # Context bias for directed attention
-        self.context_bias = nn.Parameter(torch.zeros(embed_dim))
+        self.head_gates = nn.Parameter(torch.ones(num_heads))
+        self.relative_pos_bias = nn.Parameter(torch.zeros((2 * 512 - 1), num_heads))
 
-        # Initialize weights
-        self._init_weights()
+    def _generate_relative_positions(self, seq_len, device):
+        range_vec = torch.arange(seq_len, device=device)
+        rel_pos = range_vec[None, :] - range_vec[:, None] + 511
+        return rel_pos
 
-    def _init_weights(self):
-        """Xavier initialization for better training"""
-        nn.init.xavier_uniform_(self.q_proj.weight)
-        nn.init.xavier_uniform_(self.k_proj.weight)
-        nn.init.xavier_uniform_(self.v_proj.weight)
-        nn.init.xavier_uniform_(self.out_proj.weight)
-
-    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None,
-                context_vector: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, x, mask: Optional[torch.Tensor] = None):
         B, T, C = x.size()
-        H = self.num_heads
-        head_dim = self.head_dim
 
-        # Projections
-        Q = self.q_proj(x)
-        K = self.k_proj(x)
-        V = self.v_proj(x)
+        q = self.q_proj(x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
+        k = self.k_proj(x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
+        v = self.v_proj(x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
 
-        # Context-directed attention
-        if context_vector is not None:
-            Q = Q + self.context_bias * context_vector
+        attn_scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.head_dim)
 
-        # Reshape for multi-head attention
-        Q = Q.view(B, T, H, head_dim).transpose(1, 2)  # (B, H, T, head_dim)
-        K = K.view(B, T, H, head_dim).transpose(1, 2)
-        V = V.view(B, T, H, head_dim).transpose(1, 2)
+        rel_pos_idx = self._generate_relative_positions(T, x.device)
+        pos_bias = self.relative_pos_bias[rel_pos_idx]
+        pos_bias = pos_bias.permute(2, 0, 1).unsqueeze(0)
+        attn_scores = attn_scores + pos_bias
 
-        # Scaled dot-product attention
-        scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(head_dim)
-
-        # Apply causal mask if provided
         if mask is not None:
-            scores = scores.masked_fill(mask == 0, -1e9)
+            attn_scores = attn_scores.masked_fill(mask == 0, float('-inf'))
 
-        # Attention weights and output
-        attn_weights = F.softmax(scores, dim=-1)
+        if self.sparse_topk > 0:
+            topk = torch.topk(attn_scores, self.sparse_topk, dim=-1)
+            topk_mask = torch.full_like(attn_scores, float('-inf'))
+            topk_mask.scatter_(-1, topk.indices, topk.values)
+            attn_scores = topk_mask
+
+        attn_weights = F.softmax(attn_scores, dim=-1)
         attn_weights = self.dropout(attn_weights)
-        attn_output = torch.matmul(attn_weights, V)
 
-        # Reshape back
-        out = attn_output.transpose(1, 2).contiguous().view(B, T, C)
-        return self.out_proj(out)
+        gated_weights = attn_weights * self.head_gates.view(1, self.num_heads, 1, 1)
+
+        attn_output = torch.matmul(gated_weights, v)
+        attn_output = attn_output.transpose(1, 2).contiguous().view(B, T, C)
+
+        return self.out_proj(attn_output)
