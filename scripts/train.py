@@ -1,4 +1,6 @@
 import torch
+
+from api.app import start_api
 from config.base_config import device, BrainFormerConfig
 from data.loader import load_data, create_batches, prepare_and_save_data
 from models.brainformer import BrainFormer
@@ -23,6 +25,7 @@ def main():
         print("\n1 - Train (Gelişmiş Eğitim)")
         print("2 - Run (Gelişmiş Çalıştırma)")
         print("3 - Exit (Çıkış)")
+        print("4 - Start API")
 
         choice = input("\nSeçiminiz (1-3): ").strip()
 
@@ -91,6 +94,9 @@ def main():
         elif choice == "3":
             print("\n👋 Görüşmek üzere!")
             break
+
+        elif choice == "4":
+            start_api()
 
         else:
             print("❌ Geçersiz seçim! Lütfen 1, 2 veya 3 girin.")
