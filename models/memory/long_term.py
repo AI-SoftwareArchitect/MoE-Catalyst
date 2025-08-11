@@ -1,108 +1,168 @@
+# long_term.py
+from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# =============================================================================
-# ADVANCED MEMORY SYSTEMS -=LONG TERM=-
-# =============================================================================
+
+DROPOUT_DEFAULT: float = 0.1
+DECAY_RATE_DEFAULT: float = 0.995
+
+
 class LongTermMemory(nn.Module):
-    """Enhanced Long Term Memory with learnable importance scoring and attention-based retrieval"""
+    """
+    Basit uzun süreli bellek (LTM) bileşeni:
+      - store: Önem skoruna göre dairesel tampona yazma
+      - retrieve: Normalize edilmiş kosinüs benzerliği ile top-k vektörleri ağırlıklı toplama
+    """
 
-    def __init__(self, embed_dim: int, buffer_size: int = 1024, device=None):
+    def __init__(
+            self,
+            embed_dim: int,
+            buffer_size: int = 4096,
+            device: Optional[torch.device] = None,
+            decay_rate: float = DECAY_RATE_DEFAULT,
+    ):
         super().__init__()
-        self.embed_dim = embed_dim
-        self.buffer_size = buffer_size
+        self.embed_dim = int(embed_dim)
+        self.buffer_size = int(buffer_size)
         self.device = device or torch.device("cpu")
+        self.decay_rate = float(decay_rate)
 
-        # Learnable importance scorer (sigmoid gating)
-        self.importance_gate = nn.Sequential(
+        # Önem skoru üreticisi (0..1)
+        self.importance_scorer = nn.Sequential(
             nn.Linear(embed_dim, embed_dim // 2),
             nn.ReLU(),
             nn.Linear(embed_dim // 2, 1),
-            nn.Sigmoid()
+            nn.Sigmoid(),
         )
+        # Geri uyumluluk için alias (Renaming)
+        self.importance_gate = self.importance_scorer
 
-        # Memory transformation (to get query/key/value vectors)
+        # İsteğe bağlı dönüştürücü (şu an kullanılmıyor ama korunuyor)
         self.memory_transform = nn.Sequential(
             nn.Linear(embed_dim, embed_dim * 2),
             nn.GELU(),
-            nn.Dropout(0.1),
-            nn.Linear(embed_dim * 2, embed_dim)
+            nn.Dropout(DROPOUT_DEFAULT),
+            nn.Linear(embed_dim * 2, embed_dim),
         )
 
-        # Circular buffer and pointer for storage
-        self.register_buffer('ltm_buffer', torch.zeros(buffer_size, embed_dim))
-        self.register_buffer('ltm_ptr', torch.zeros(1, dtype=torch.long))
+        # Dairesel tampon ve göstergeleri
+        self.register_buffer("ltm_buffer", torch.zeros(self.buffer_size, embed_dim))
+        self.register_buffer("ltm_ptr", torch.tensor(0, dtype=torch.long))
+        self.register_buffer("ltm_full", torch.tensor(False, dtype=torch.bool))
 
-        # Decay factor to forget old memories gradually
-        self.decay_rate = 0.99
+        # Modülü hedef cihaza taşı
+        self.to(self.device)
 
-    def store(self, x: torch.Tensor):
-        """Store important representations into circular buffer"""
-        with torch.no_grad():
-            importance_scores = self.importance_gate(x).squeeze(-1)  # (B*T)
-            threshold = importance_scores.mean()
-            important_mask = importance_scores > threshold
-            important_items = x[important_mask]
+    # ------ Helper functions (Extract Function) ------
 
-            if important_items.size(0) == 0:
-                return  # Nothing important to store
+    @staticmethod
+    def _normalize(t: torch.Tensor) -> torch.Tensor:
+        return F.normalize(t, dim=-1, eps=1e-6)
 
-            ptr = self.ltm_ptr.item()
-            batch_size = important_items.size(0)
+    def _buffer_length(self) -> int:
+        if bool(self.ltm_full.item()):
+            return self.buffer_size
+        return int(self.ltm_ptr.item())
 
-            end_ptr = (ptr + batch_size) % self.buffer_size
+    @torch.no_grad()
+    def _compute_store_mask(self, x: torch.Tensor) -> torch.Tensor:
+        scores = self.importance_scorer(x).squeeze(-1)  # (N,)
+        threshold = scores.mean()
+        return scores > threshold  # (N,)
 
-            if end_ptr > ptr:
-                self.ltm_buffer[ptr:end_ptr] = important_items[:batch_size].to(self.device)
-            else:
-                first_len = self.buffer_size - ptr
-                self.ltm_buffer[ptr:] = important_items[:first_len].to(self.device)
-                self.ltm_buffer[:end_ptr] = important_items[first_len:batch_size].to(self.device)
+    @torch.no_grad()
+    def _ring_buffer_write(self, items: torch.Tensor) -> None:
+        """
+        items: (n, D), cihazı ltm_buffer ile hizalanmış olmalı.
+        """
+        if items.numel() == 0:
+            return
+        ptr = int(self.ltm_ptr.item())
+        n = int(items.size(0))
+        end = (ptr + n) % self.buffer_size
 
-            self.ltm_ptr[0] = end_ptr
+        if ptr + n <= self.buffer_size:
+            self.ltm_buffer[ptr:ptr + n] = items
+        else:
+            first = self.buffer_size - ptr
+            self.ltm_buffer[ptr:] = items[:first]
+            self.ltm_buffer[:end] = items[first:]
 
-    def retrieve(self, x: torch.Tensor, top_k: int = 16):
-        """Retrieve relevant memories for input x using cosine similarity"""
-        if self.ltm_ptr.item() == 0:
+        # Tampon doluluğunu güncelle
+        if not bool(self.ltm_full.item()) and (ptr + n) >= self.buffer_size:
+            self.ltm_full.fill_(True)
+
+        # Pointer'ı güvenle güncelle (register_buffer korunur)
+        self.ltm_ptr.fill_(end)
+
+        # Global çürüme uygula
+        self.ltm_buffer.mul_(self.decay_rate)
+
+    # ------ Public API ------
+
+    @torch.no_grad()
+    def store(self, x: torch.Tensor) -> None:
+        """
+        x: (N, D) - yazmaya aday düzleştirilmiş temsiller
+        """
+        if x.dim() != 2 or x.size(-1) != self.embed_dim:
+            raise ValueError(f"store expects (N, {self.embed_dim}) got {tuple(x.shape)}")
+
+        if self.buffer_size == 0:
+            return
+
+        x = x.to(self.ltm_buffer.device)
+        mask = self._compute_store_mask(x)
+        items = x[mask]
+        if items.numel() == 0:
+            return
+
+        self._ring_buffer_write(items)
+
+    def retrieve(self, x: torch.Tensor, top_k: int = 16) -> torch.Tensor:
+        """
+        x: (B, T, D)
+        Returns: (B, T, D) - bellekten top-k yumuşak toplama
+        """
+        if x.dim() != 3 or x.size(-1) != self.embed_dim:
+            raise ValueError(f"retrieve expects (B, T, {self.embed_dim}) got {tuple(x.shape)}")
+
+        length = self._buffer_length()
+        if length == 0:
             return torch.zeros_like(x)
 
-        # Normalize queries and memory
-        queries = F.normalize(x, dim=-1)  # (B, T, C)
-        memories = F.normalize(self.ltm_buffer, dim=-1)  # (buffer_size, C)
+        mems = self.ltm_buffer[:length].to(x.device)  # (M, D)
+        mems_n = self._normalize(mems)
+        queries = self._normalize(x)  # (B, T, D)
 
-        # Compute cosine similarity (B, T, buffer_size)
-        scores = torch.einsum('btc,mc->btm', queries, memories)
+        # Kosinüs skorları ve top-k seçim
+        scores = torch.einsum("btc,mc->btm", queries, mems_n)  # (B, T, M)
+        k = max(1, min(int(top_k), length))
+        topk_scores, topk_idx = torch.topk(scores, k=k, dim=-1)  # (B, T, k)
+        weights = F.softmax(topk_scores, dim=-1)  # (B, T, k)
 
-        # Top-k retrieval
-        topk_scores, topk_indices = torch.topk(scores, k=min(top_k, self.ltm_ptr.item()), dim=-1)
+        # Seçilen bellek vektörlerini al ve ağırlıklı topla
+        selected = mems[topk_idx]  # (B, T, k, D)
+        weighted = selected * weights.unsqueeze(-1)  # (B, T, k, D)
+        return weighted.sum(dim=2)  # (B, T, D)
 
-        # Weighted sum of retrieved memories
-        retrieved = torch.zeros_like(x)
-        for b in range(x.size(0)):
-            for t in range(x.size(1)):
-                idxs = topk_indices[b, t]
-                wts = F.softmax(topk_scores[b, t], dim=-1)
-                mems = self.ltm_buffer[idxs]
-                retrieved[b, t] = (mems * wts.unsqueeze(-1)).sum(dim=0)
-
-        return retrieved
-
-    def forward(self, x: torch.Tensor, store: bool = False, retrieve: bool = False):
+    def forward(self, x: torch.Tensor, store: bool = False, retrieve: bool = False, top_k: int = 16) -> torch.Tensor:
         """
-        x: input tensor (B, T, C)
-        store: whether to store important features into memory
-        retrieve: whether to retrieve relevant memories and add to input
+        Basit yönlendirme:
+          - store=True ise x (N, D) beklenir ve bellek güncellenir; çıktı x döndürülür.
+          - retrieve=True ise x (B, T, D) beklenir ve bellekten alınan temsil döndürülür.
+          - Her ikisi de False ise x aynen döndürülür.
         """
-        if store and self.training:
-            self.store(x.view(-1, self.embed_dim))
+        if store and retrieve:
+            raise ValueError("store and retrieve aynı anda True olamaz.")
 
-            # Apply decay to buffer to slowly forget old memories
-            self.ltm_buffer.mul_(self.decay_rate)
-
-        mem_output = self.memory_transform(x)
+        if store:
+            store_x = x if x.dim() == 2 else x.reshape(-1, x.size(-1))
+            self.store(store_x)
+            return x
 
         if retrieve:
-            retrieved_mem = self.retrieve(x)
-            mem_output = mem_output + retrieved_mem
+            return self.retrieve(x, top_k=top_k)
 
-        return mem_output
+        return x

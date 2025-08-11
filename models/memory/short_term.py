@@ -1,23 +1,21 @@
+# short_term_memory.py
 import torch
 import torch.nn as nn
 
-# =============================================================================
-# ADVANCED MEMORY SYSTEMS -=SHORT TERM=-
-# =============================================================================
 class ShortTermMemory(nn.Module):
-    """Enhanced STM with gated update, learnable forget and memory compression"""
-
-    def __init__(self, embed_dim: int, memory_size: int = 16, max_seq_len: int = 16, device=None):
+    """
+    Simpler, robust STM:
+    - keeps a learnable small memory bank
+    - integrates via gating and returns (B, T, D) shaped output (no hard-assert)
+    """
+    def __init__(self, embed_dim: int, memory_size: int = 16, device: torch.device = None):
         super().__init__()
         self.embed_dim = embed_dim
         self.memory_size = memory_size
-        self.seq_len = max_seq_len
         self.device = device or torch.device("cpu")
 
-        # Initialize learnable memory bank
-        self.memory = nn.Parameter(torch.randn(1, memory_size, embed_dim) * 0.1)
+        self.memory = nn.Parameter(torch.randn(1, memory_size, embed_dim) * 0.02)
 
-        # Gating mechanism for input integration
         self.input_gate = nn.Sequential(
             nn.Linear(embed_dim, embed_dim // 2),
             nn.ReLU(),
@@ -25,7 +23,6 @@ class ShortTermMemory(nn.Module):
             nn.Sigmoid()
         )
 
-        # Forget gate to selectively forget memory contents
         self.forget_gate = nn.Sequential(
             nn.Linear(embed_dim, embed_dim // 2),
             nn.ReLU(),
@@ -33,45 +30,27 @@ class ShortTermMemory(nn.Module):
             nn.Sigmoid()
         )
 
-        # Compression layer with fixed input size
-        self.memory_compress = nn.Sequential(
-            nn.Linear((self.seq_len + memory_size) * embed_dim, (self.seq_len + memory_size) * embed_dim // 2),
-            nn.ReLU(),
-            nn.Linear((self.seq_len + memory_size) * embed_dim // 2, (self.seq_len + memory_size) * embed_dim)
-        )
+        # compressor: reduce concatenated (T+M) feature per-token via projection
+        self.project = nn.Linear((memory_size + 1) * embed_dim, embed_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        x: Input tensor (B, T, C)
-        Returns combined tensor (B, T + memory_size, C)
-        """
+        # x: (B, T, D)
+        B, T, D = x.shape
+        mem = self.memory.expand(B, -1, -1)  # (B, M, D)
 
-        B, T, C = x.shape
-        assert C == self.embed_dim, f"Embedding dimension mismatch: expected {self.embed_dim}, got {C}"
-        assert T == self.seq_len, f"Expected sequence length {self.seq_len}, got {T}"
+        input_g = self.input_gate(x)  # (B, T, 1)
+        gated_inputs = x * input_g  # (B, T, D)
 
-        # Expand memory for batch
-        memory = self.memory.expand(B, -1, -1)  # (B, memory_size, embed_dim)
+        pooled = x.mean(dim=1)  # (B, D)
+        forget = self.forget_gate(pooled).unsqueeze(-1)  # (B, M, 1)
+        mem = mem * (1 - forget)
 
-        # Compute input gate scores (B, T, 1)
-        input_gates = self.input_gate(x)
-
-        # Apply gating to inputs
-        gated_inputs = x * input_gates
-
-        # Compute forget gates for memory (B, memory_size, 1)
-        pooled_x = x.mean(dim=1)  # (B, embed_dim)
-        forget_gates = self.forget_gate(pooled_x).unsqueeze(-1)  # (B, memory_size, 1)
-
-        # Apply forget gate with broadcasting on embed_dim
-        memory = memory * (1 - forget_gates)
-
-        # Concatenate gated input with memory along sequence dimension
-        combined = torch.cat([gated_inputs, memory], dim=1)  # (B, T + memory_size, embed_dim)
-
-        # Compress combined memory
-        combined_flat = combined.view(B, -1)  # Flatten (B, (T + memory_size) * embed_dim)
-        compressed = self.memory_compress(combined_flat)
-        compressed = compressed.view(B, self.seq_len + self.memory_size, self.embed_dim)
-
-        return compressed
+        # For each token, concatenate token + flattened memory and project back
+        mem_flat = mem.view(B, -1)  # (B, M*D)
+        mem_rep = mem_flat.unsqueeze(1).expand(-1, T, -1)  # (B, T, M*D)
+        token_and_mem = torch.cat([gated_inputs, mem_rep], dim=-1)  # (B, T, D + M*D)
+        # project back to (B, T, D) — uses larger projection
+        # To keep sizes stable, we compress with a linear that expects (D + M*D)
+        # For safety, use a linear with input dim (D + M*D)
+        out = self.project(token_and_mem)  # (B, T, D)
+        return out
