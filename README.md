@@ -8,12 +8,12 @@ Beynin sağ ve sol yarım küresini taklit eden, hafif, hızlı ve optimize edil
 ![MoECatalyst](moecatalyst.png)
 
 ## Özellikler
-- **Hybrid Brain Simulation**: Sağ yarım küre → yaratıcı, sol yarım küre → mantıksal yanıtlar
+- **Hybrid Brain Simulation**: Sağ yarım küre → hayal gücü yüksek yanıtlar, sol yarım küre → mantıksal yanıtlar
 - **Short-Term & Long-Term Memory**: Bağlamı koruyan hafıza sistemi
 - **Mixture of Experts (MoE)**: Dinamik olarak doğru "uzmanı" seçer
 - **FlashAttention v2** & CUDA Graph optimizasyonu: Minimum gecikme
 - **Tiktoken tabanlı özel tokenizer**
-- **3050 GPU uyumlu**: 2.5M parametre, 1488 vocabulary, 10740 batch size
+- **CUDA uyumlu**
 - **TorchMetrics** ile performans takibi
 - **Mobil + Web arayüz** ve API desteği
 
@@ -25,4 +25,5 @@ pip install -r requirements.txt
 ```
 
 MONITORING: tensorboard --logdir=logs
+
 
