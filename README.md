@@ -1,11 +1,11 @@
-# 🚀 MoE Catalyst
+# MoE Catalyst
 
 **MoE Catalyst** is a lightweight, modular **Mixture of Experts (MoE)** framework designed to accelerate experimentation with expert routing and scalable LLM architectures.
 
-# Catalyst 🧠⚡
+# Catalyst
 Beynin sağ ve sol yarım küresini taklit eden, hafif, hızlı ve optimize edilmiş bir LLM.
 
-## 🚀 Özellikler
+## Özellikler
 - **Hybrid Brain Simulation**: Sağ yarım küre → yaratıcı, sol yarım küre → mantıksal yanıtlar
 - **Short-Term & Long-Term Memory**: Bağlamı koruyan hafıza sistemi
 - **Mixture of Experts (MoE)**: Dinamik olarak doğru "uzmanı" seçer
@@ -15,10 +15,11 @@ Beynin sağ ve sol yarım küresini taklit eden, hafif, hızlı ve optimize edil
 - **TorchMetrics** ile performans takibi
 - **Mobil + Web arayüz** ve API desteği
 
-## 📦 Kurulum
+## Kurulum
 ```bash
 git clone https://github.com/kullaniciadi/catalyst.git
 cd catalyst
 pip install -r requirements.txt
 ```
+
 
