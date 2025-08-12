@@ -5,6 +5,8 @@
 # Catalyst
 Beynin sağ ve sol yarım küresini taklit eden, hafif, hızlı ve optimize edilmiş bir LLM.
 
+![MoECatalyst](moecatalyst.png)
+
 ## Özellikler
 - **Hybrid Brain Simulation**: Sağ yarım küre → yaratıcı, sol yarım küre → mantıksal yanıtlar
 - **Short-Term & Long-Term Memory**: Bağlamı koruyan hafıza sistemi
@@ -22,4 +24,5 @@ cd catalyst
 pip install -r requirements.txt
 ```
 
+MONITORING: tensorboard --logdir=logs
 
