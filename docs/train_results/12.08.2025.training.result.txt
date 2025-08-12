@@ -1,0 +1,30 @@
+📊 Veri yüklendi - Vocab: 1488, Sequences: 85915
+🏗️ Model oluşturuldu - Parametreler: 2,533,869
+📦 Batch'ler hazırlandı: 10740
+🧠 Epoch 1/30 | ⏱️ Elapsed: 0h 9m 6s | 📉 Loss: 1.7705 | 🔁 LR: 0.000500 | ✅ 3.3% | ⏳ ETA: 4h 24m 6s
+🧠 Epoch 2/30 | ⏱️ Elapsed: 0h 17m 37s | 📉 Loss: 1.5490 | 🔁 LR: 0.000500 | ✅ 6.7% | ⏳ ETA: 3h 58m 19s
+🧠 Epoch 3/30 | ⏱️ Elapsed: 0h 26m 31s | 📉 Loss: 1.4665 | 🔁 LR: 0.000500 | ✅ 10.0% | ⏳ ETA: 4h 0m 32s
+🧠 Epoch 4/30 | ⏱️ Elapsed: 0h 36m 14s | 📉 Loss: 1.4226 | 🔁 LR: 0.000500 | ✅ 13.3% | ⏳ ETA: 4h 12m 43s
+🧠 Epoch 5/30 | ⏱️ Elapsed: 0h 45m 27s | 📉 Loss: 1.3914 | 🔁 LR: 0.000500 | ✅ 16.7% | ⏳ ETA: 3h 50m 18s
+🧠 Epoch 6/30 | ⏱️ Elapsed: 0h 54m 11s | 📉 Loss: 1.3654 | 🔁 LR: 0.000500 | ✅ 20.0% | ⏳ ETA: 3h 29m 34s
+🧠 Epoch 7/30 | ⏱️ Elapsed: 1h 3m 17s | 📉 Loss: 1.3390 | 🔁 LR: 0.000500 | ✅ 23.3% | ⏳ ETA: 3h 29m 16s
+🧠 Epoch 8/30 | ⏱️ Elapsed: 1h 12m 8s | 📉 Loss: 1.3151 | 🔁 LR: 0.000500 | ✅ 26.7% | ⏳ ETA: 3h 14m 39s
+🧠 Epoch 9/30 | ⏱️ Elapsed: 1h 20m 41s | 📉 Loss: 1.2972 | 🔁 LR: 0.000500 | ✅ 30.0% | ⏳ ETA: 2h 59m 32s
+🧠 Epoch 10/30 | ⏱️ Elapsed: 1h 30m 3s | 📉 Loss: 1.2835 | 🔁 LR: 0.000500 | ✅ 33.3% | ⏳ ETA: 3h 7m 30s
+🧠 Epoch 11/30 | ⏱️ Elapsed: 1h 39m 36s | 📉 Loss: 1.2730 | 🔁 LR: 0.000500 | ✅ 36.7% | ⏳ ETA: 3h 1m 18s
+🧠 Epoch 12/30 | ⏱️ Elapsed: 1h 48m 17s | 📉 Loss: 1.2647 | 🔁 LR: 0.000500 | ✅ 40.0% | ⏳ ETA: 2h 36m 9s
+🧠 Epoch 13/30 | ⏱️ Elapsed: 1h 57m 0s | 📉 Loss: 1.2566 | 🔁 LR: 0.000500 | ✅ 43.3% | ⏳ ETA: 2h 28m 21s
+🧠 Epoch 14/30 | ⏱️ Elapsed: 2h 5m 33s | 📉 Loss: 1.2514 | 🔁 LR: 0.000500 | ✅ 46.7% | ⏳ ETA: 2h 16m 37s
+🧠 Epoch 15/30 | ⏱️ Elapsed: 2h 13m 11s | 📉 Loss: 1.2456 | 🔁 LR: 0.000500 | ✅ 50.0% | ⏳ ETA: 1h 54m 32s
+🧠 Epoch 16/30 | ⏱️ Elapsed: 2h 20m 49s | 📉 Loss: 1.2408 | 🔁 LR: 0.000500 | ✅ 53.3% | ⏳ ETA: 1h 47m 0s
+🧠 Epoch 17/30 | ⏱️ Elapsed: 2h 29m 9s | 📉 Loss: 1.2366 | 🔁 LR: 0.000500 | ✅ 56.7% | ⏳ ETA: 1h 48m 17s
+🧠 Epoch 18/30 | ⏱️ Elapsed: 2h 38m 35s | 📉 Loss: 1.2331 | 🔁 LR: 0.000500 | ✅ 60.0% | ⏳ ETA: 1h 53m 12s
+🧠 Epoch 19/30 | ⏱️ Elapsed: 2h 47m 35s | 📉 Loss: 1.2298 | 🔁 LR: 0.000500 | ✅ 63.3% | ⏳ ETA: 1h 38m 58s
+🧠 Epoch 20/30 | ⏱️ Elapsed: 2h 56m 30s | 📉 Loss: 1.2260 | 🔁 LR: 0.000500 | ✅ 66.7% | ⏳ ETA: 1h 29m 7s
+🧠 Epoch 21/30 | ⏱️ Elapsed: 3h 5m 26s | 📉 Loss: 1.2227 | 🔁 LR: 0.000500 | ✅ 70.0% | ⏳ ETA: 1h 20m 23s
+🧠 Epoch 22/30 | ⏱️ Elapsed: 3h 13m 42s | 📉 Loss: 1.2192 | 🔁 LR: 0.000500 | ✅ 73.3% | ⏳ ETA: 1h 6m 10s
+🧠 Epoch 23/30 | ⏱️ Elapsed: 3h 22m 5s | 📉 Loss: 1.2155 | 🔁 LR: 0.000500 | ✅ 76.7% | ⏳ ETA: 0h 58m 38s
+🧠 Epoch 24/30 | ⏱️ Elapsed: 3h 30m 3s | 📉 Loss: 1.2094 | 🔁 LR: 0.000500 | ✅ 80.0% | ⏳ ETA: 0h 47m 50s
+🧠 Epoch 25/30 | ⏱️ Elapsed: 3h 38m 20s | 📉 Loss: 1.2061 | 🔁 LR: 0.000500 | ✅ 83.3% | ⏳ ETA: 0h 41m 23s
+🧠 Epoch 26/30 | ⏱️ Elapsed: 3h 47m 59s | 📉 Loss: 1.2027 | 🔁 LR: 0.000500 | ✅ 86.7% | ⏳ ETA: 0h 38m 38s
+🧠 Epoch 27/30 | ⏱️ Elapsed: 3h 57m 8s | 📉 Loss: 1.1995 | 🔁 LR: 0.000500 | ✅ 90.0% | ⏳ ETA: 0h 27m 26s

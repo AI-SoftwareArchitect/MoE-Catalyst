@@ -22,14 +22,28 @@ else:
 # =============================================================================
 @dataclass
 class BrainFormerConfig:
-    d_model: int = 16
-    num_heads: int = 2
-    num_layers: int = 2
-    vocab_size: int = 1000
-    max_seq_len: int = 16
-    memory_size: int = 16
-    ff_hidden_dim: int = 64
-    early_exit_threshold: float = 0.9
+    vocab_size: int = 15000
+    d_model: int = 128
+    max_seq_len: int = 512
+    num_heads: int = 4
+    num_layers: int = 4
+    ff_hidden_dim: int = 512
     dropout: float = 0.1
-    temperature: float = 0.8
-    device: str = str(device)
+
+    # Bellek/erken çıkış
+    memory_size: int = 8
+    early_exit_threshold: float = 0.95
+    ltm_buffer_size: int = 512
+    relative_max_pos: int = 256
+
+    # MoE ayarları
+    use_moe: bool = True                 # MoE katmanını aç/kapat
+    moe_num_experts: int = 4             # ≥ top_k olmalı (öneri: 4 veya 8)
+    moe_expert_hidden: int = 512         # tipik olarak 2–4× d_model
+    moe_top_k: int = 2                   # istenen top-k
+    moe_expert_dropout: float = 0.1      # uzman çıkışlarına dropout
+    moe_lambda: float = 0.01             # aux (load-balance) loss katsayısı
+
+    def __post_init__(self):
+        assert 1 <= self.moe_top_k <= self.moe_num_experts, \
+            f"moe_top_k ({self.moe_top_k}) moe_num_experts ({self.moe_num_experts}) değerini aşamaz"

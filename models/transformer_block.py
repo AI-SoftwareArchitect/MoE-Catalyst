@@ -1,10 +1,8 @@
-# transformer_block.py
+# models/transformer_block.py
 import torch
 import torch.nn as nn
 from typing import Optional
-
 from models.attention.directed_multihead import DirectedMultiheadAttention
-
 
 class TransformerBlock(nn.Module):
     def __init__(self, embed_dim: int, num_heads: int, ff_hidden_dim: int, dropout: float = 0.1, max_pos: int = 512):

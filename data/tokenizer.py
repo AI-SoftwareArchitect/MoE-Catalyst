@@ -16,20 +16,18 @@ class Tokenizer:
         self.use_tiktoken = False
         self.tiktoken_encoder = None
 
-        # Tiktoken kullanılacaksa
         if model_name and tiktoken:
             try:
                 self.tiktoken_encoder = tiktoken.get_encoding(model_name)
                 self.use_tiktoken = True
+                print(f"[Tokenizer] Tiktoken encoding yüklendi: {model_name}")
             except Exception as e:
                 print(f"[Tokenizer] Tiktoken model yüklenemedi: {e}, eski mod kullanılacak.")
 
-        # Eğer tiktoken kullanılmıyorsa mevcut vocab yükle
         if not self.use_tiktoken and os.path.exists(vocab_path):
             self.load_vocab()
 
-    def build_vocab(self, text_lines):
-        """Eski kelime bazlı tokenizer için vocab inşa et (tiktoken modunda çalışmaz)."""
+    def build_vocab(self, text_lines, max_vocab_size=15000):
         if self.use_tiktoken:
             print("[Tokenizer] build_vocab tiktoken modunda kullanılmaz.")
             return
@@ -39,7 +37,9 @@ class Tokenizer:
             unique_words.update(self.tokenize(line))
 
         special_tokens = ["[PAD]", "[UNK]"]
-        vocab = special_tokens + sorted(unique_words)
+        limited_words = sorted(unique_words)[: max_vocab_size - len(special_tokens)]
+        vocab = special_tokens + limited_words
+
         self.word_to_id = {word: idx for idx, word in enumerate(vocab)}
         self.id_to_word = {idx: word for word, idx in self.word_to_id.items()}
 
@@ -65,8 +65,7 @@ class Tokenizer:
 
     def tokenize(self, text):
         if self.use_tiktoken:
-            # Tiktoken kelime bazlı tokenize dönmez, burada byte-piece parçaları stringe çeviriyoruz
-            ids = self.tiktoken_encoder.encode(text)
+            ids = self.tiktoken_encoder.encode(text, allowed_special="all")
             return [self.tiktoken_encoder.decode([i]) for i in ids]
         else:
             text = text.lower().strip()
@@ -76,7 +75,12 @@ class Tokenizer:
 
     def encode(self, text):
         if self.use_tiktoken:
-            return self.tiktoken_encoder.encode(text)
+            try:
+                return self.tiktoken_encoder.encode(text, allowed_special="all")
+            except KeyError:
+                # Karakter-level fallback
+                print("[Tokenizer] Bilinmeyen token bulundu, karakter-level fallback kullanılıyor.")
+                return [self.tiktoken_encoder.encode(ch, allowed_special="all")[0] for ch in text]
         return [self.word_to_id.get(w, self.word_to_id["[UNK]"]) for w in self.tokenize(text)]
 
     def decode(self, ids):

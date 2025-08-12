@@ -8,6 +8,10 @@ from models.dual_brain import DualBrainTransformer
 from models.early_exit import EarlyExitClassifier
 from models.memory.long_term import LongTermMemory
 from models.memory.short_term import ShortTermMemory
+from models.moe.moe_layer import MoELayer
+
+
+# ... mevcut importlar
 
 
 class BrainFormer(nn.Module):
@@ -30,6 +34,26 @@ class BrainFormer(nn.Module):
 
         self._init_weights()
 
+        # MoE bayrağı ve hiperparametreleri (varsayılanlarla)
+        self.use_moe = getattr(config, "use_moe", False)
+        self.moe_lambda = getattr(config, "moe_lambda", 1e-2)
+
+        if self.use_moe:
+            self.moe = MoELayer(
+                embed_dim=config.d_model,
+                num_experts=getattr(config, "num_experts", 4),
+                expert_hidden_dim=getattr(config, "expert_hidden_dim", config.ff_hidden_dim),
+                top_k=getattr(config, "top_k", 1),
+                dropout=getattr(config, "dropout", 0.1),
+                expert_dropout=getattr(config, "expert_dropout", 0.1),
+            )
+        else:
+            self.moe = None
+
+        self.last_aux_loss = None  # eğitim döngüsünde okunacak
+
+        # ... lm_head ve diğer katmanlar
+
     def _init_weights(self):
         for module in self.modules():
             if isinstance(module, nn.Linear):
@@ -43,18 +67,34 @@ class BrainFormer(nn.Module):
         mask = torch.tril(torch.ones(seq_len, seq_len, device=device))
         return mask.unsqueeze(0).unsqueeze(0)  # (1,1,seq,seq)
 
-    def forward(self, input_ids: torch.LongTensor):
-        device = input_ids.device
-        B, seq_len = input_ids.shape
+    def forward(self, input_ids, attention_mask=None, labels=None, **kwargs):
+        # Embedding ağırlığının cihazını referans al
+        device = self.token_embedding.weight.device
+
+        # Girdiyi doğru cihaza ve doğru tipe taşı
+        if input_ids.dtype != torch.long:
+            input_ids = input_ids.long()
+        input_ids = input_ids.to(device)
+
+        # Pozisyon indeksleri aynı cihazda üretilmeli
+        seq_len = input_ids.size(1)
+        position_ids = torch.arange(seq_len, device=device).unsqueeze(0).expand(input_ids.size(0), -1)
+
+        # Varsa attention_mask CPU’da gelmiş olabilir; aynı cihaza taşıyın
+        if attention_mask is not None:
+            attention_mask = attention_mask.to(device)
 
         token_emb = self.token_embedding(input_ids)
-        pos_ids = torch.arange(seq_len, device=device).unsqueeze(0)
-        pos_emb = self.pos_embedding(pos_ids)
+        pos_emb = self.pos_embedding(position_ids)
+
         x = token_emb + pos_emb
 
-        mask = self._create_causal_mask(seq_len, device=device)
+        # Eğer causal mask veya benzeri mask üretimi varsa, onun da device=device ile oluştuğundan emin olun
+        causal_mask = self._create_causal_mask(seq_len, device=device)  # _create_causal_mask içinde device kullanın
 
-        left_out, right_out = self.dual_brain(x, mask)
+        # Devam eden forward hesapları ...
+
+        left_out, right_out = self.dual_brain(x, causal_mask)
 
         # Memory integration
         stm_out = self.stm(left_out)  # (B, T, D)
@@ -69,5 +109,17 @@ class BrainFormer(nn.Module):
                 return early_logits
             # else continue for those who didn't meet threshold (advanced: per-sample routing)
         final_output = self.final_norm(combined)
-        logits = self.output_proj(final_output)
+        
+        # ... embedding + transformer blokları
+        hidden = final_output  # (B, T, D) - mevcut son gizli durum
+
+        aux_loss = None
+        if self.moe is not None:
+            B, T, D = hidden.shape
+            moe_out, aux_loss = self.moe(hidden.reshape(B * T, D))
+            hidden = hidden + moe_out.view(B, T, D)  # residual ekleme
+
+        self.last_aux_loss = aux_loss  # torch skalar veya None
+
+        logits = self.output_proj(hidden)
         return logits

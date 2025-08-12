@@ -2,8 +2,10 @@ import torch
 
 from api.app import start_api
 from config.base_config import device, BrainFormerConfig
-from data.loader import load_data, create_batches, prepare_and_save_data
+from data.loader import load_data, create_batches
+from data.prepare_and_save import prepare_and_save_data
 from models.brainformer import BrainFormer
+from prompt_sanitizer.prompt_sanitizer import normalize_and_map_prompt
 from sampling.text_generation import generate_text
 from training.train_loop import train_model
 from utils.persistence import save_model, load_model
@@ -85,11 +87,24 @@ def main():
                 if prompt.lower() == 'q':
                     break
 
-                # Generate with different temperatures
-                print(f"\n🌡️ Temperature Karşılaştırması:")
-                for temp in [0.3, 0.8, 1.2]:
-                    generated_text = generate_text(model, vocab, word_to_id, id_to_word, prompt, temperature=temp)
-                    print(f"T={temp}: {generated_text}")
+                if not prompt.strip():
+                    print("Boş giriş.")
+                    continue
+
+                mapped_words, mapped_ids = normalize_and_map_prompt(prompt, word_to_id, sim_threshold=0.7)
+
+                if not mapped_words:
+                    print("Temizleme ve eşlemeden sonra kullanılabilir kelime kalmadı.")
+                    # sıradaki prompt'a geçin veya kullanıcıdan yeni giriş isteyin
+                else:
+                    cleaned_prompt = " ".join(mapped_words)
+                    print("\n🌡️ Temperature Karşılaştırması:")
+                    for temp in [0.3, 0.8, 1.2]:
+                        generated_text = generate_text(model, vocab, word_to_id, id_to_word, cleaned_prompt,
+                                                       temperature=temp)
+                        print(f"T={temp}: {generated_text}")
+
+
 
         elif choice == "3":
             print("\n👋 Görüşmek üzere!")

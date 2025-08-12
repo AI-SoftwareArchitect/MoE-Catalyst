@@ -1,14 +1,15 @@
-# moe_layer.py
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from topk_gate import TopKGate
+
+from models.moe.topk_gate import TopKGate
+
 
 class MoELayer(nn.Module):
-    def __init__(self, embed_dim: int, num_experts: int = 4, expert_hidden_dim: int = 2048, top_k: int = 1, dropout: float = 0.1):
+    def __init__(self, embed_dim: int, num_experts: int = 4, expert_hidden_dim: int = 2048, top_k: int = 2, dropout: float = 0.1, expert_dropout: float = 0.1):
         super().__init__()
         self.num_experts = num_experts
         self.top_k = top_k
+        self.expert_dropout = nn.Dropout(expert_dropout)
         self.experts = nn.ModuleList([
             nn.Sequential(
                 nn.Linear(embed_dim, expert_hidden_dim),
@@ -19,28 +20,45 @@ class MoELayer(nn.Module):
         ])
         self.gate = TopKGate(embed_dim, num_experts, top_k)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor):
         """
-        x: (N, D)  N = batch * seq (flatten if necessary)
-        returns: (N, D)
+        x: (N, D)
+        returns: (N, D), aux_loss (load balancing)
         """
         gates, idxs = self.gate(x)  # gates: (N,K), idxs: (N,K)
         N, D = x.shape
-        out = x.new_zeros(N, D)
 
-        # group positions per expert
+        # Efficient batch per expert
+        out = torch.zeros_like(x)
+        aux_loss = 0
+
         for expert_id in range(self.num_experts):
-            # mask positions that route to this expert for any k
-            mask_any = (idxs == expert_id).any(dim=1)  # (N,)
-            if not mask_any.any():
+            # Mask positions for this expert
+            mask = (idxs == expert_id)  # (N, top_k)
+            if not mask.any():
                 continue
-            pos = mask_any.nonzero(as_tuple=True)[0]
-            inp = x[pos]  # (M, D)
-            expert_out = self.experts[expert_id](inp)  # (M, D)
-            # compute weight per position: sum gates where idx == expert_id
-            weight = x.new_zeros(pos.size(0))
+
+            # Positions and weights for this expert
+            positions = mask.any(dim=1).nonzero(as_tuple=True)[0]  # (M,)
+            if positions.numel() == 0:
+                continue
+
+            # Collect inputs and gates for expert
+            expert_gates = torch.zeros(positions.size(0), device=x.device, dtype=x.dtype)
             for k in range(self.top_k):
-                sel = (idxs[pos, k] == expert_id).to(x.dtype) * gates[pos, k]
-                weight = weight + sel
-            out[pos] = out[pos] + expert_out * weight.unsqueeze(-1)
-        return out
+                expert_gates += gates[positions, k] * mask[positions, k].to(x.dtype)
+
+            expert_inputs = x[positions]  # (M, D)
+            expert_inputs = self.expert_dropout(expert_inputs)
+
+            # Forward expert in batch
+            expert_outputs = self.experts[expert_id](expert_inputs)  # (M, D)
+
+            # Weighted sum outputs
+            out[positions] += expert_outputs * expert_gates.unsqueeze(-1)
+
+            # Load balancing loss (coefficient 1e-2, can be tuned)
+            prob_expert = gates[:, 0].mean()  # avg gate prob for expert at top_k=1
+            aux_loss += prob_expert * prob_expert  # penalize imbalance (can be refined)
+
+        return out, aux_loss
